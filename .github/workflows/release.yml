@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "Release-*" # e.g. v0.1.0
+  workflow_dispatch: # allow manual trigger
+
+permissions:
+  contents: write # create GitHub Releases
+  packages: write # push to GHCR
+
+env:
+  BINARY_NAME: pushgo-gateway
+  IMAGE_NAME: pushgo-gateway
+  SOURCE_BINARY_NAME: pushgo-gateway
+
+jobs:
+  build-binaries:
+    name: Build release binaries (x86_64 + aarch64 + arm32v7, gnu + musl)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add cross compilation targets
+        run: |
+          rustup target add x86_64-unknown-linux-gnu
+          rustup target add aarch64-unknown-linux-gnu
+          rustup target add armv7-unknown-linux-gnueabihf
+          rustup target add x86_64-unknown-linux-musl
+          rustup target add aarch64-unknown-linux-musl
+          rustup target add armv7-unknown-linux-musleabihf
+
+      - name: Install linkers for GNU targets
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo apt-get install -y gcc-arm-linux-gnueabihf
+
+      - name: Install cross for musl targets
+        run: cargo install cross --locked
+
+      - name: Build release binaries (GNU)
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
+        run: |
+          cargo build --release -p pushgo-app-oss --bin ${{ env.SOURCE_BINARY_NAME }} --target x86_64-unknown-linux-gnu
+          cargo build --release -p pushgo-app-oss --bin ${{ env.SOURCE_BINARY_NAME }} --target aarch64-unknown-linux-gnu
+          cargo build --release -p pushgo-app-oss --bin ${{ env.SOURCE_BINARY_NAME }} --target armv7-unknown-linux-gnueabihf
+
+      - name: Build release binaries (musl)
+        run: |
+          cat > Cross.toml <<'EOF'
+          [target.x86_64-unknown-linux-musl]
+          image = "ghcr.io/cross-rs/x86_64-unknown-linux-musl:main"
+
+          [target.aarch64-unknown-linux-musl]
+          image = "ghcr.io/cross-rs/aarch64-unknown-linux-musl:main"
+
+          [target.armv7-unknown-linux-musleabihf]
+          image = "ghcr.io/cross-rs/armv7-unknown-linux-musleabihf:main"
+          EOF
+          cross build --release -p pushgo-app-oss --bin ${{ env.SOURCE_BINARY_NAME }} --target x86_64-unknown-linux-musl
+          cross build --release -p pushgo-app-oss --bin ${{ env.SOURCE_BINARY_NAME }} --target aarch64-unknown-linux-musl
+          cross build --release -p pushgo-app-oss --bin ${{ env.SOURCE_BINARY_NAME }} --target armv7-unknown-linux-musleabihf
+
+      - name: Collect binaries for artifacts and Docker
+        run: |
+          mkdir -p dist
+          cp target/x86_64-unknown-linux-gnu/release/${SOURCE_BINARY_NAME} dist/${BINARY_NAME}-amd64-gnu
+          cp target/aarch64-unknown-linux-gnu/release/${SOURCE_BINARY_NAME} dist/${BINARY_NAME}-arm64-gnu
+          cp target/armv7-unknown-linux-gnueabihf/release/${SOURCE_BINARY_NAME} dist/${BINARY_NAME}-armv7-gnu
+          cp target/x86_64-unknown-linux-musl/release/${SOURCE_BINARY_NAME} dist/${BINARY_NAME}-amd64-musl
+          cp target/aarch64-unknown-linux-musl/release/${SOURCE_BINARY_NAME} dist/${BINARY_NAME}-arm64-musl
+          cp target/armv7-unknown-linux-musleabihf/release/${SOURCE_BINARY_NAME} dist/${BINARY_NAME}-armv7-musl
+          chmod +x dist/${BINARY_NAME}-amd64-gnu dist/${BINARY_NAME}-arm64-gnu dist/${BINARY_NAME}-armv7-gnu
+          chmod +x dist/${BINARY_NAME}-amd64-musl dist/${BINARY_NAME}-arm64-musl dist/${BINARY_NAME}-armv7-musl
+          ls -l dist
+
+      - name: Upload prebuilt binaries as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pushgo-binaries
+          path: dist
+
+  docker:
+    name: Build & push multi-arch Docker image to GHCR
+    runs-on: ubuntu-latest
+    needs: build-binaries
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download prebuilt binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: pushgo-binaries
+          path: dist
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract tag
+        id: vars
+        run: |
+          echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_OUTPUT
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: . # includes dist/ and deploy/Dockerfile.gh
+          file: ./deploy/Dockerfile.gh
+          push: true
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          build-args: |
+            BINARY_NAME=${{ env.BINARY_NAME }}
+          tags: |
+            ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ env.IMAGE_NAME }}:latest
+            ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.tag }}
+            ghcr.io/${{ steps.vars.outputs.owner_lc }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-binaries, docker]
+
+    steps:
+      - name: Download prebuilt binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: pushgo-binaries
+          path: dist
+
+      - name: Create GitHub Release with autogenerated notes
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/${{ env.BINARY_NAME }}-amd64-gnu
+            dist/${{ env.BINARY_NAME }}-arm64-gnu
+            dist/${{ env.BINARY_NAME }}-armv7-gnu
+            dist/${{ env.BINARY_NAME }}-amd64-musl
+            dist/${{ env.BINARY_NAME }}-arm64-musl
+            dist/${{ env.BINARY_NAME }}-armv7-musl

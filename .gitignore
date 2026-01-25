@@ -1,0 +1,7 @@
+/target/
+/dist/
+/.cargo/
+/.env
+/.env.*
+!/.env.example
+/*.log
