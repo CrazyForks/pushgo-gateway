@@ -10,8 +10,8 @@ use crate::{
         validate_channel_password,
     },
     app::AppState,
-    dispatch::{ApnsJob, FcmJob},
-    providers::{apns::ApnsPayload, fcm::FcmPayload},
+    dispatch::{ApnsJob, FcmJob, WnsJob},
+    providers::{apns::ApnsPayload, fcm::FcmPayload, wns::WnsPayload},
     storage::{Platform, StoreError},
 };
 
@@ -102,10 +102,14 @@ pub(crate) async fn push_to_channel(
 
     let mut has_android = false;
     let mut has_apns = false;
+    let mut has_wns = false;
     for device in &devices {
         match device.platform {
             Platform::ANDROID => {
                 has_android = true;
+            }
+            Platform::WINDOWS => {
+                has_wns = true;
             }
             _ => {
                 has_apns = true;
@@ -148,7 +152,13 @@ pub(crate) async fn push_to_channel(
         None
     };
     let fcm_payload = if has_android {
-        let payload = Arc::new(FcmPayload::new(data, priority));
+        let payload = Arc::new(FcmPayload::new(data.clone(), priority));
+        Some(payload)
+    } else {
+        None
+    };
+    let wns_payload = if has_wns {
+        let payload = Arc::new(WnsPayload::new(data.clone()));
         Some(payload)
     } else {
         None
@@ -165,6 +175,23 @@ pub(crate) async fn push_to_channel(
                     .clone()
                     .ok_or(Error::Internal("missing FCM payload".to_string()))?;
                 match state.dispatch.try_send_fcm(FcmJob {
+                    channel_id,
+                    device_token: Arc::from(device.token_str()),
+                    payload,
+                }) {
+                    Ok(()) => accepted += 1,
+                    Err(crate::dispatch::DispatchError::QueueFull) => rejected += 1,
+                    Err(crate::dispatch::DispatchError::ChannelClosed) => {
+                        rejected += 1;
+                        dispatch_closed = true;
+                    }
+                }
+            }
+            Platform::WINDOWS => {
+                let payload = wns_payload
+                    .clone()
+                    .ok_or(Error::Internal("missing WNS payload".to_string()))?;
+                match state.dispatch.try_send_wns(WnsJob {
                     channel_id,
                     device_token: Arc::from(device.token_str()),
                     payload,

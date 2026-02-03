@@ -83,6 +83,16 @@ impl ApnsService {
                     invalid_token: false,
                 };
             }
+            Platform::WINDOWS => {
+                return DispatchResult {
+                    success: false,
+                    status_code: 0,
+                    error: Some(Error::Validation(
+                        "windows platform must be delivered via WNS",
+                    )),
+                    invalid_token: false,
+                };
+            }
         };
         self.send_with_retry(device_token, topic, payload, collapse_id)
             .await
@@ -171,7 +181,8 @@ impl ApnsService {
             .header("authorization", format!("bearer {auth_token}"))
             .header("apns-topic", topic)
             .header("content-type", "application/json")
-            .header("apns-push-type", "alert");
+            .header("apns-push-type", "alert")
+            .header("apns-priority", "10");
         if let Some(ref id) = collapse_id {
             request = request.header("apns-collapse-id", id.as_ref());
         }
@@ -206,7 +217,8 @@ impl ApnsService {
                         .header("authorization", format!("bearer {auth_token}"))
                         .header("apns-topic", topic)
                         .header("content-type", "application/json")
-                        .header("apns-push-type", "alert");
+                        .header("apns-push-type", "alert")
+                        .header("apns-priority", "10");
                     if let Some(ref id) = collapse_id {
                         request = request.header("apns-collapse-id", id.as_ref());
                     }

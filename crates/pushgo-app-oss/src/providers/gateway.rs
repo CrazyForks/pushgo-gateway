@@ -17,6 +17,7 @@ const TOKEN_REFRESH_BUFFER: Duration = Duration::from_secs(60);
 pub enum GatewayProvider {
     Apns,
     Fcm,
+    Wns,
 }
 
 impl GatewayProvider {
@@ -24,6 +25,7 @@ impl GatewayProvider {
         match self {
             GatewayProvider::Apns => "apns",
             GatewayProvider::Fcm => "fcm",
+            GatewayProvider::Wns => "wns",
         }
     }
 }

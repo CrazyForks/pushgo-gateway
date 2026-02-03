@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_channel::{Receiver, Sender, TrySendError};
 
 use crate::{
-    providers::{ApnsClient, FcmClient, apns::ApnsPayload, fcm::FcmPayload},
+    providers::{ApnsClient, FcmClient, WnsClient, apns::ApnsPayload, fcm::FcmPayload, wns::WnsPayload},
     storage::{Platform, Store},
 };
 
@@ -24,10 +24,17 @@ pub(crate) struct FcmJob {
     pub payload: Arc<FcmPayload>,
 }
 
+pub(crate) struct WnsJob {
+    pub channel_id: [u8; 16],
+    pub device_token: Arc<str>,
+    pub payload: Arc<WnsPayload>,
+}
+
 #[derive(Clone)]
 pub(crate) struct DispatchChannels {
     apns_tx: Sender<ApnsJob>,
     fcm_tx: Sender<FcmJob>,
+    wns_tx: Sender<WnsJob>,
 }
 
 #[derive(Debug)]
@@ -52,24 +59,45 @@ impl DispatchChannels {
             Err(TrySendError::Closed(_)) => Err(DispatchError::ChannelClosed),
         }
     }
+
+    pub(crate) fn try_send_wns(&self, job: WnsJob) -> Result<(), DispatchError> {
+        match self.wns_tx.try_send(job) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(_)) => Err(DispatchError::QueueFull),
+            Err(TrySendError::Closed(_)) => Err(DispatchError::ChannelClosed),
+        }
+    }
 }
 
-pub(crate) fn create_dispatch_channels() -> (DispatchChannels, Receiver<ApnsJob>, Receiver<FcmJob>)
-{
+pub(crate) fn create_dispatch_channels(
+) -> (DispatchChannels, Receiver<ApnsJob>, Receiver<FcmJob>, Receiver<WnsJob>) {
     let (apns_tx, apns_rx) = async_channel::bounded(CHANNEL_CAPACITY);
     let (fcm_tx, fcm_rx) = async_channel::bounded(CHANNEL_CAPACITY);
-    (DispatchChannels { apns_tx, fcm_tx }, apns_rx, fcm_rx)
+    let (wns_tx, wns_rx) = async_channel::bounded(CHANNEL_CAPACITY);
+    (
+        DispatchChannels {
+            apns_tx,
+            fcm_tx,
+            wns_tx,
+        },
+        apns_rx,
+        fcm_rx,
+        wns_rx,
+    )
 }
 
 pub(crate) fn spawn_dispatch_workers(
     apns_rx: Receiver<ApnsJob>,
     fcm_rx: Receiver<FcmJob>,
+    wns_rx: Receiver<WnsJob>,
     apns: Arc<dyn ApnsClient>,
     fcm: Arc<dyn FcmClient>,
+    wns: Arc<dyn WnsClient>,
     store: Store,
 ) {
     spawn_apns_worker(apns_rx, apns, Arc::clone(&store));
-    spawn_fcm_worker(fcm_rx, fcm, store);
+    spawn_fcm_worker(fcm_rx, fcm, Arc::clone(&store));
+    spawn_wns_worker(wns_rx, wns, store);
 }
 
 fn spawn_apns_worker(apns_rx: Receiver<ApnsJob>, apns: Arc<dyn ApnsClient>, store: Store) {
@@ -114,6 +142,28 @@ fn spawn_fcm_worker(fcm_rx: Receiver<FcmJob>, fcm: Arc<dyn FcmClient>, store: St
                         job.channel_id,
                         job.device_token.as_ref(),
                         Platform::ANDROID,
+                    );
+                }
+            }
+        });
+    }
+}
+
+fn spawn_wns_worker(wns_rx: Receiver<WnsJob>, wns: Arc<dyn WnsClient>, store: Store) {
+    for _ in 0..IN_FLIGHT_LIMIT {
+        let wns_rx = wns_rx.clone();
+        let wns = Arc::clone(&wns);
+        let store = Arc::clone(&store);
+        tokio::spawn(async move {
+            while let Ok(job) = wns_rx.recv().await {
+                let dispatch = wns
+                    .send_to_device(job.device_token.as_ref(), job.payload)
+                    .await;
+                if dispatch.invalid_token {
+                    let _ = store.unsubscribe_channel(
+                        job.channel_id,
+                        job.device_token.as_ref(),
+                        Platform::WINDOWS,
                     );
                 }
             }

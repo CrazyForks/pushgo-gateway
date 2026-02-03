@@ -69,6 +69,7 @@ pub enum Platform {
     MACOS = 2,
     WATCHOS = 4,
     ANDROID = 5,
+    WINDOWS = 6,
 }
 
 impl FromStr for Platform {
@@ -84,6 +85,7 @@ impl FromStr for Platform {
             "macos" => Ok(Platform::MACOS),
             "watchos" => Ok(Platform::WATCHOS),
             "android" => Ok(Platform::ANDROID),
+            "windows" | "win" => Ok(Platform::WINDOWS),
             _ => Err(StoreError::InvalidPlatform),
         }
     }
@@ -102,6 +104,7 @@ impl Platform {
             2 => Some(Platform::MACOS),
             4 => Some(Platform::WATCHOS),
             5 => Some(Platform::ANDROID),
+            6 => Some(Platform::WINDOWS),
             _ => None,
         }
     }
@@ -188,7 +191,9 @@ fn decode_android_token(s: &str) -> StoreResult<Vec<u8>> {
 
 fn token_len_valid(platform: Platform, len: usize) -> bool {
     match platform {
-        Platform::ANDROID => (ANDROID_TOKEN_MIN_LEN..=ANDROID_TOKEN_MAX_LEN).contains(&len),
+        Platform::ANDROID | Platform::WINDOWS => {
+            (ANDROID_TOKEN_MIN_LEN..=ANDROID_TOKEN_MAX_LEN).contains(&len)
+        }
         _ => (DEVICEINFO_TOKEN_MIN_LEN..=DEVICEINFO_TOKEN_MAX_LEN).contains(&len),
     }
 }
@@ -215,7 +220,7 @@ impl DeviceInfo {
     /// Parse and validate a client-provided token string.
     pub fn from_token(platform: Platform, token: &str) -> StoreResult<Self> {
         let raw = match platform {
-            Platform::ANDROID => decode_android_token(token)?,
+            Platform::ANDROID | Platform::WINDOWS => decode_android_token(token)?,
             _ => decode_hex_token(token)?,
         };
         Self::from_raw(platform, raw)
@@ -224,7 +229,7 @@ impl DeviceInfo {
     /// Build from raw bytes loaded from storage.
     pub fn from_raw(platform: Platform, raw: Vec<u8>) -> StoreResult<Self> {
         let token_str = match platform {
-            Platform::ANDROID => {
+            Platform::ANDROID | Platform::WINDOWS => {
                 String::from_utf8(raw.clone()).map_err(|_| StoreError::BinaryError)?
             }
             _ => encode_hex_lower(&raw),

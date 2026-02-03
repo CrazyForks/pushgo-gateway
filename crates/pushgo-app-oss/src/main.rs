@@ -7,10 +7,10 @@ use tokio::{net::TcpListener, signal};
 use pushgo_core::{
     app::build_app,
     config::CoreArgs,
-    providers::{ApnsService, FcmService},
+    providers::{ApnsService, FcmService, WnsService},
 };
 
-use crate::providers::{apns::ApnsTokenProvider, fcm::FcmTokenProvider};
+use crate::providers::{apns::ApnsTokenProvider, fcm::FcmTokenProvider, wns::WnsTokenProvider};
 
 mod providers;
 
@@ -57,16 +57,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .map_err(|err| pushgo_core::Error::Internal(err.to_string()))?;
 
     let apns_token_provider = Arc::new(ApnsTokenProvider::new(&args.gateway_url, client.clone())?);
-    let fcm_token_provider = Arc::new(FcmTokenProvider::new(&args.gateway_url, client)?);
+    let fcm_token_provider = Arc::new(FcmTokenProvider::new(&args.gateway_url, client.clone())?);
+    let wns_token_provider = Arc::new(WnsTokenProvider::new(&args.gateway_url, client)?);
 
     let apns = Arc::new(ApnsService::new(
         apns_token_provider,
         "https://api.push.apple.com",
     )?);
     let fcm = Arc::new(FcmService::new(fcm_token_provider)?);
+    let wns = Arc::new(WnsService::new(wns_token_provider)?);
 
     let docs_html = include_str!("../../pushgo-core/src/api/docs_oss.html");
-    let app: Router = build_app(&args.core, apns, fcm, docs_html, false)?;
+    let app: Router = build_app(&args.core, apns, fcm, wns, docs_html, false)?;
     let addr: SocketAddr = args.core.http_addr.parse()?;
 
     let listener = TcpListener::bind(addr).await?;

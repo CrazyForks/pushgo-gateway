@@ -320,9 +320,9 @@
           <span class="badge">JSON</span>
         </p>
         <p>
-          用于获取 APNs/FCM 服务端发送消息的鉴权 token。
+          用于获取 APNs/FCM/WNS 服务端发送消息的鉴权 token。
           <br />
-          Returns the server-side auth token for APNs/FCM delivery.
+          Returns the server-side auth token for APNs/FCM/WNS delivery.
         </p>
 
         <h3>请求参数<br />Query parameters</h3>
@@ -341,9 +341,11 @@
               <td>是<br />Yes</td>
               <td>string</td>
               <td>
-                鉴权提供方，取值为 <code>apns</code> 或 <code>fcm</code>。
+                鉴权提供方，取值为 <code>apns</code>、<code>fcm</code> 或
+                <code>wns</code>。
                 <br />
-                Auth provider: <code>apns</code> or <code>fcm</code>.
+                Auth provider: <code>apns</code>, <code>fcm</code>, or
+                <code>wns</code>.
               </td>
             </tr>
           </tbody>
@@ -367,7 +369,7 @@
             <tr>
               <td><code>token</code></td>
               <td>string</td>
-              <td>用于 APNs/FCM 的鉴权 token。<br />Auth token for APNs/FCM.</td>
+              <td>用于 APNs/FCM/WNS 的鉴权 token。<br />Auth token for APNs/FCM/WNS.</td>
             </tr>
             <tr>
               <td><code>expires_in</code></td>

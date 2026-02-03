@@ -7,11 +7,11 @@ use tokio::{net::TcpListener, signal};
 use pushgo_core::{
     app::build_app,
     config::CoreArgs,
-    providers::{ApnsService, FcmService},
+    providers::{ApnsService, FcmService, WnsService},
 };
 
 use crate::config::AppConfig;
-use crate::providers::{apns::ApnsTokenProvider, fcm::FcmTokenProvider};
+use crate::providers::{apns::ApnsTokenProvider, fcm::FcmTokenProvider, wns::WnsTokenProvider};
 
 mod config;
 mod providers;
@@ -74,15 +74,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let apns_token_provider = Arc::new(ApnsTokenProvider::new(&config.apns)?);
     let fcm_token_provider = Arc::new(FcmTokenProvider::new(&config.fcm)?);
+    let wns_token_provider = Arc::new(WnsTokenProvider::new(&config.wns)?);
 
     let apns = Arc::new(ApnsService::new(
         apns_token_provider,
         &config.apns.endpoint,
     )?);
     let fcm = Arc::new(FcmService::new(fcm_token_provider)?);
+    let wns = Arc::new(WnsService::new(wns_token_provider)?);
 
     let docs_html = include_str!("../../pushgo-core/src/api/docs.html");
-    let app: Router = build_app(&args.core, apns, fcm, docs_html, true)?;
+    let app: Router = build_app(&args.core, apns, fcm, wns, docs_html, true)?;
     let addr: SocketAddr = args.core.http_addr.parse()?;
 
     let listener = TcpListener::bind(addr).await?;

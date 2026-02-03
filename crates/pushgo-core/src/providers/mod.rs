@@ -6,9 +6,12 @@ pub mod apns;
 pub mod apns_client;
 pub mod fcm;
 pub mod fcm_client;
+pub mod wns;
+pub mod wns_client;
 
 pub use apns_client::ApnsService;
 pub use fcm_client::FcmService;
+pub use wns_client::WnsService;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -44,6 +47,11 @@ pub trait FcmTokenProvider: Send + Sync {
     fn token_info_fresh<'a>(&'a self) -> BoxFuture<'a, Result<FcmAccess, Error>>;
 }
 
+pub trait WnsTokenProvider: Send + Sync {
+    fn token_info<'a>(&'a self) -> BoxFuture<'a, Result<TokenInfo, Error>>;
+    fn token_info_fresh<'a>(&'a self) -> BoxFuture<'a, Result<TokenInfo, Error>>;
+}
+
 pub trait ApnsClient: Send + Sync {
     fn send_to_device<'a>(
         &'a self,
@@ -63,6 +71,18 @@ pub trait FcmClient: Send + Sync {
         &'a self,
         device_token: &'a str,
         payload: Arc<fcm::FcmPayload>,
+    ) -> BoxFuture<'a, DispatchResult>;
+
+    fn token_info<'a>(&'a self) -> BoxFuture<'a, Result<TokenInfo, Error>>;
+
+    fn token_info_fresh<'a>(&'a self) -> BoxFuture<'a, Result<TokenInfo, Error>>;
+}
+
+pub trait WnsClient: Send + Sync {
+    fn send_to_device<'a>(
+        &'a self,
+        device_token: &'a str,
+        payload: Arc<wns::WnsPayload>,
     ) -> BoxFuture<'a, DispatchResult>;
 
     fn token_info<'a>(&'a self) -> BoxFuture<'a, Result<TokenInfo, Error>>;

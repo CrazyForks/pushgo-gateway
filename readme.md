@@ -1,6 +1,6 @@
 # PushGo Gateway
 
-PushGo Gateway is a lightweight push gateway for PushGo. It manages channel subscriptions, receives push requests, and sends notifications directly to APNs and FCM.
+PushGo Gateway is a lightweight push gateway for PushGo. It manages channel subscriptions, receives push requests, and sends notifications directly to APNs, FCM, and WNS.
 
 ## Project Links
 
@@ -12,14 +12,14 @@ PushGo Gateway is a lightweight push gateway for PushGo. It manages channel subs
 
 This repository builds two binaries:
 
-- `pushgo` (public gateway): requires APNs/FCM credentials and serves Token APIs.
-- `pushgo-gateway` (self-hosted gateway): fetches Tokens and sends notifications directly to APNs/FCM.
+- `pushgo` (public gateway): requires APNs/FCM/WNS credentials and serves Token APIs.
+- `pushgo-gateway` (self-hosted gateway): fetches Tokens and sends notifications directly to APNs/FCM/WNS.
 
 Only `pushgo-gateway` is published in OSS releases and Docker images.
 
 ## Public Gateway vs Self-Hosted
 
-By default, a self-hosted gateway pulls APNs/FCM Tokens from the public gateway at `https://gateway.pushgo.dev`, then sends notifications directly to APNs/FCM.
+By default, a self-hosted gateway pulls APNs/FCM/WNS Tokens from the public gateway at `https://gateway.pushgo.dev`, then sends notifications directly to APNs/FCM/WNS.
 
 ## Configuration
 
@@ -94,7 +94,7 @@ Authorization: Bearer <token>
 
 # PushGo Gateway（中文）
 
-PushGo Gateway 是为 PushGo 开发的轻量推送网关。它管理客户端的频道订阅数据，接收消息推送请求，并直接向 APNs 和 FCM 发送通知。
+PushGo Gateway 是为 PushGo 开发的轻量推送网关。它管理客户端的频道订阅数据，接收消息推送请求，并直接向 APNs、FCM 和 WNS 发送通知。
 
 ## 项目链接
 
@@ -106,14 +106,14 @@ PushGo Gateway 是为 PushGo 开发的轻量推送网关。它管理客户端的
 
 本仓库会生成两个二进制：
 
-- `pushgo`（公共网关）：需要 APNs/FCM 证书，提供 Token 服务接口。
-- `pushgo-gateway`（自部署网关）：获取 Token 并直接向 APNs/FCM 发起推送。
+- `pushgo`（公共网关）：需要 APNs/FCM/WNS 证书，提供 Token 服务接口。
+- `pushgo-gateway`（自部署网关）：获取 Token 并直接向 APNs/FCM/WNS 发起推送。
 
 开源镜像与发布包只提供 `pushgo-gateway`。
 
 ## 公共网关与自部署关系
 
-默认情况下，自部署网关从公共网关 `https://gateway.pushgo.dev` 获取 APNs/FCM Token，并直连 APNs 和 FCM 发送通知。
+默认情况下，自部署网关从公共网关 `https://gateway.pushgo.dev` 获取 APNs/FCM/WNS Token，并直连 APNs、FCM 和 WNS 发送通知。
 
 ## 配置
 

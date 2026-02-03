@@ -3,12 +3,13 @@ use std::collections::HashMap;
 use serde::Serialize;
 
 /// Core APS payload fields.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Aps {
     pub alert: Alert,
     pub sound: Sound,
-    pub mutable_content: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mutable_content: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thread_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -16,7 +17,7 @@ pub struct Aps {
 }
 
 /// Alert content shown to the user.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct Alert {
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -24,7 +25,7 @@ pub struct Alert {
 }
 
 /// Sound configuration (name or detailed settings).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(untagged)]
 pub enum Sound {
     Name(String),
@@ -36,7 +37,7 @@ pub enum Sound {
 }
 
 /// Full APNs payload with flattened client data.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct ApnsPayload {
     pub aps: Aps,
     #[serde(flatten)]
@@ -58,7 +59,7 @@ impl ApnsPayload {
             aps: Aps {
                 alert: Alert { title, body },
                 sound,
-                mutable_content: 1,
+                mutable_content: Some(1),
                 thread_id,
                 interruption_level: level,
             },

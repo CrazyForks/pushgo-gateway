@@ -21,6 +21,7 @@ pub(crate) struct ProviderTokenResponse {
 enum TokenProvider {
     Apns,
     Fcm,
+    Wns,
 }
 
 impl TokenProvider {
@@ -28,6 +29,7 @@ impl TokenProvider {
         match raw.trim().to_ascii_lowercase().as_str() {
             "apns" => Some(TokenProvider::Apns),
             "fcm" => Some(TokenProvider::Fcm),
+            "wns" => Some(TokenProvider::Wns),
             _ => None,
         }
     }
@@ -36,6 +38,7 @@ impl TokenProvider {
         match self {
             TokenProvider::Apns => "apns",
             TokenProvider::Fcm => "fcm",
+            TokenProvider::Wns => "wns",
         }
     }
 }
@@ -45,10 +48,11 @@ pub(crate) async fn provider_token(
     Query(query): Query<ProviderTokenQuery>,
 ) -> HttpResult {
     let provider = TokenProvider::parse(&query.provider)
-        .ok_or(Error::Validation("provider must be apns or fcm"))?;
+        .ok_or(Error::Validation("provider must be apns, fcm, or wns"))?;
     let info = match provider {
         TokenProvider::Apns => state.apns.token_info_fresh().await?,
         TokenProvider::Fcm => state.fcm.token_info_fresh().await?,
+        TokenProvider::Wns => state.wns.token_info_fresh().await?,
     };
 
     Ok(crate::api::ok(ProviderTokenResponse {

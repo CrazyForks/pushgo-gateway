@@ -133,7 +133,7 @@ where
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return Err(D::Error::custom(
-            "platform must not be empty (expected one of: ios, ipados, macos, watchos, android)",
+            "platform must not be empty (expected one of: ios, ipados, macos, watchos, android, windows)",
         ));
     }
     Platform::from_str(trimmed).map_err(D::Error::custom)

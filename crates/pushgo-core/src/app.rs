@@ -7,7 +7,7 @@ use crate::{
     api::{Error, router::build_router},
     config::CoreArgs,
     dispatch::{DispatchChannels, create_dispatch_channels, spawn_dispatch_workers},
-    providers::{ApnsClient, FcmClient},
+    providers::{ApnsClient, FcmClient, WnsClient},
     storage::{Store, new_store},
 };
 
@@ -25,23 +25,27 @@ pub(crate) struct AppState {
     pub store: Store,
     pub apns: Arc<dyn ApnsClient>,
     pub fcm: Arc<dyn FcmClient>,
+    pub wns: Arc<dyn WnsClient>,
 }
 
 pub fn build_app(
     args: &CoreArgs,
     apns: Arc<dyn ApnsClient>,
     fcm: Arc<dyn FcmClient>,
+    wns: Arc<dyn WnsClient>,
     docs_html: &'static str,
     include_provider_token: bool,
 ) -> Result<Router, Box<dyn std::error::Error>> {
     let store = new_store(&args.data_path, args.db_url.as_deref())?;
 
-    let (dispatch, apns_rx, fcm_rx) = create_dispatch_channels();
+    let (dispatch, apns_rx, fcm_rx, wns_rx) = create_dispatch_channels();
     spawn_dispatch_workers(
         apns_rx,
         fcm_rx,
+        wns_rx,
         Arc::clone(&apns),
         Arc::clone(&fcm),
+        Arc::clone(&wns),
         Arc::clone(&store),
     );
 
@@ -67,6 +71,7 @@ pub fn build_app(
         store,
         apns,
         fcm,
+        wns,
     };
 
     Ok(build_router(state, docs_html, include_provider_token))
